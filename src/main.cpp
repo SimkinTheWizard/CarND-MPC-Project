@@ -9,8 +9,63 @@
 #include "MPC.h"
 #include "json.hpp"
 
+
+
 // for convenience
 using json = nlohmann::json;
+
+//
+// Helper functions to fit and evaluate polynomials.
+//
+
+// Evaluate a polynomial.
+double polyeval(Eigen::VectorXd coeffs, double x) {
+	double result = 0.0;
+	for (int i = 0; i < coeffs.size(); i++) {
+		result += coeffs[i] * pow(x, i);
+	}
+	return result;
+}
+
+// Fit a polynomial.
+// Adapted from
+// https://github.com/JuliaMath/Polynomials.jl/blob/master/src/Polynomials.jl#L676-L716
+Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
+						int order) {
+	assert(xvals.size() == yvals.size());
+	assert(order >= 1 && order <= xvals.size() - 1);
+	Eigen::MatrixXd A(xvals.size(), order + 1);
+	
+	for (int i = 0; i < xvals.size(); i++) {
+		A(i, 0) = 1.0;
+	}
+	
+	for (int j = 0; j < xvals.size(); j++) {
+		for (int i = 0; i < order; i++) {
+			A(j, i + 1) = A(j, i) * xvals(j);
+		}
+	}
+	
+	auto Q = A.householderQr();
+	auto result = Q.solve(yvals);
+	return result;
+}
+
+/*
+ Date received from the socket
+ https://github.com/udacity/CarND-MPC-Project/blob/master/DATA.md
+ ptsx (Array) - The global x positions of the waypoints.
+ ptsy (Array) - The global y positions of the waypoints. This corresponds to the z coordinate in Unity since y is the up-down direction.
+ psi (float) - The orientation of the vehicle in radians converted from the Unity format to the standard format expected in most mathemetical functions (more details below).
+ psi_unity (float) - The orientation of the vehicle in radians. This is an orientation commonly used in navigation.
+ x (float) - The global x position of the vehicle.
+ y (float) - The global y position of the vehicle.
+ steering_angle (float) - The current steering angle in radians.
+ throttle (float) - The current throttle value [-1, 1].
+ speed (float) - The current velocity in mph.
+ 
+ */
+
 
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
@@ -98,8 +153,17 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+			auto coeffs = polyfit(ptsx, ptsy, 1) ;
+			double cte = polyeval(coeffs, px) - py ;
+			double epsi = psi - atan(coeffs[1]) ;
+			
+			Eigen::VectorXd state(6);
+			state << px, py, psi, v, cte, epsi;
+				
+				auto vars = mpc.Solve(state, coeffs);
+			
+          double steer_value = vars[0];
+          double throttle_value = -vars[1];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
