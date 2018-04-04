@@ -9,6 +9,7 @@
 
 using CppAD::AD;
 
+
 // TODO: Set the timestep length and duration
 size_t N = 10;
 double dt = 0.05;
@@ -35,7 +36,7 @@ size_t a_start = delta_start + N - 1;
 // This is the length from front to CoG that has a similar radius.
 const double Lf = 2.67;
 
-double ref_v = 40;
+double ref_v = 50;
 
 class FG_eval {
  public:
@@ -57,24 +58,24 @@ class FG_eval {
 	  for (int t = 0; t<N; t++)
 	  {
 		  // Penalize Cross track error and psi error
-		  fg[0] += CppAD::pow(vars[cte_start + t],2);
-		  fg[0] += CppAD::pow(vars[epsi_start + t],2);
+		  fg[0] += 100*CppAD::pow(vars[cte_start + t],2);
+		  fg[0] += 1000*CppAD::pow(vars[epsi_start + t],2);
 		  // Penalize speed error
-		  fg[0] += CppAD::pow(vars[v_start + t]-ref_v,2);
+		  fg[0] += 10*CppAD::pow(vars[v_start + t]-ref_v,2);
 	  }
 	  
 	  for (int t = 0; t<N-1; t++)
 	  {
 		  // Penalize over use of throttle and steering
-		  fg[0] += CppAD::pow(vars[delta_start + t],2);
-		  fg[0] += CppAD::pow(vars[a_start + t],2);
+		  fg[0] += 60000*CppAD::pow(vars[delta_start + t],2);
+		  fg[0] += 20*CppAD::pow(vars[a_start + t],2);
 	  }
 	  
 	  for (int t = 0; t<N-2; t++)
 	  {
 		  // Penalize sharp movements
-		  fg[0] += CppAD::pow(vars[delta_start + t] - vars[delta_start + t + 1],2);
-		  fg[0] += CppAD::pow(vars[a_start + t] - vars[a_start + t + 1],2);
+		  fg[0] += 100 * CppAD::pow(vars[delta_start + t] - vars[delta_start + t + 1],2);
+		  fg[0] += 50*CppAD::pow(vars[a_start + t] - vars[a_start + t + 1],2);
 	  }
 	  
 	  fg[1 + x_start] = vars[x_start];
@@ -115,7 +116,7 @@ class FG_eval {
 		  // TODO: Setup the rest of the model constraints
 		  fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
 		  fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
-		  fg[1 + psi_start + t] = psi1 - (psi0 + v0/Lf * delta0 * dt);
+		  fg[1 + psi_start + t] = psi1 - (psi0 - v0/Lf * delta0 * dt);
 		  fg[1 + v_start + t] = v1 - (v0 +  a0* dt);
 		  fg[1 + cte_start + t] = cte1 - ((f0-y0)+ v0 * CppAD::sin(epsi0) * dt);
 		  fg[1 + epsi_start + t] = epsi1 - ((psi0-psides0) + v0/Lf * delta0 * dt);
@@ -124,11 +125,14 @@ class FG_eval {
   }
 };
 
+
+
 //
 // MPC class definition implementation.
 //
 MPC::MPC() {}
 MPC::~MPC() {}
+
 
 vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   bool ok = true;
@@ -146,7 +150,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // element vector and there are 10 timesteps. The number of variables is:
   //
   // 4 * 10 + 2 * 9
-  size_t n_vars = 6*N+6*(N-1);
+  size_t n_vars = 6*N+2*(N-1);
   // TODO: Set the number of constraints
   size_t n_constraints = N * 6;
 
@@ -168,7 +172,13 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   Dvector vars_lowerbound(n_vars);
   Dvector vars_upperbound(n_vars);
   // TODO: Set lower and upper limits for variables.
-
+	for (int i = 0; i < delta_start; i++) {
+		
+		vars_lowerbound[i] = -1.0e19;
+		
+		vars_upperbound[i] = 1.0e19;
+		
+	}
 	// The upper and lower limits of delta are set to -25 and 25
 	// degrees (values in radians).
 	// NOTE: Feel free to change this to something else.
@@ -228,7 +238,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   options += "Sparse  true        reverse\n";
   // NOTE: Currently the solver has a maximum time limit of 0.5 seconds.
   // Change this as you see fit.
-  options += "Numeric max_cpu_time          0.5\n";
+  options += "Numeric max_cpu_time          20.5\n";
 
   // place to return solution
   CppAD::ipopt::solve_result<Dvector> solution;
@@ -237,6 +247,9 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   CppAD::ipopt::solve<Dvector, FG_eval>(
       options, vars, vars_lowerbound, vars_upperbound, constraints_lowerbound,
       constraints_upperbound, fg_eval, solution);
+	std::cout << "Solution delta_start: " << solution.x[delta_start] << std::endl;
+	std::cout << "Solution a_start: " << solution.x[a_start] << std::endl;
+	std::cout << "Solution x_start: " << solution.x[x_start] << std::endl;
 
   // Check some of the solution values
   ok &= solution.status == CppAD::ipopt::solve_result<Dvector>::success;
@@ -252,3 +265,5 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // creates a 2 element double vector.
 	return {solution.x[delta_start ], solution.x[a_start]};
 }
+
+

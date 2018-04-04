@@ -14,42 +14,8 @@
 // for convenience
 using json = nlohmann::json;
 
-//
-// Helper functions to fit and evaluate polynomials.
-//
 
-// Evaluate a polynomial.
-double polyeval(Eigen::VectorXd coeffs, double x) {
-	double result = 0.0;
-	for (int i = 0; i < coeffs.size(); i++) {
-		result += coeffs[i] * pow(x, i);
-	}
-	return result;
-}
 
-// Fit a polynomial.
-// Adapted from
-// https://github.com/JuliaMath/Polynomials.jl/blob/master/src/Polynomials.jl#L676-L716
-Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
-						int order) {
-	assert(xvals.size() == yvals.size());
-	assert(order >= 1 && order <= xvals.size() - 1);
-	Eigen::MatrixXd A(xvals.size(), order + 1);
-	
-	for (int i = 0; i < xvals.size(); i++) {
-		A(i, 0) = 1.0;
-	}
-	
-	for (int j = 0; j < xvals.size(); j++) {
-		for (int i = 0; i < order; i++) {
-			A(j, i + 1) = A(j, i) * xvals(j);
-		}
-	}
-	
-	auto Q = A.householderQr();
-	auto result = Q.solve(yvals);
-	return result;
-}
 
 /*
  Date received from the socket
@@ -152,18 +118,37 @@ int main() {
           *
           * Both are in between [-1, 1].
           *
-          */
-			auto coeffs = polyfit(ptsx, ptsy, 1) ;
-			double cte = polyeval(coeffs, px) - py ;
-			double epsi = psi - atan(coeffs[1]) ;
+		   */
+			// To deal with latency
+			// estimate position 100 miliseconds into the future.
+			double delay_seconds = 0.1;
+			px = px + v * cos(psi) * delay_seconds;
+			py = py + v * sin(psi) * delay_seconds;
+			
+			Eigen::VectorXd vptsx = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(ptsx.data(), ptsx.size());
+			Eigen::VectorXd vptsy = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(ptsy.data(), ptsy.size());
+			
+			for (int i = 0; i< ptsx.size(); i ++)
+			{
+				double tx = vptsx[i];
+				double ty = vptsy[i];
+				vptsx[i] = (tx - px) * cos(-psi) - (ty - py) * sin(-psi);
+				vptsy[i] = (ty - py) * cos(-psi) + (tx - px) * sin(-psi);
+			}
+			
+			std::cout << vptsx << std::endl;
+			
+			auto coeffs = polyfit(vptsx, vptsy, 3) ;
+			double cte = polyeval(coeffs, 0) - 0 ;
+			double epsi =   - atan(coeffs[1]) ;
 			
 			Eigen::VectorXd state(6);
-			state << px, py, psi, v, cte, epsi;
+			state << 0, 0, 0, v, cte, epsi;
 				
-				auto vars = mpc.Solve(state, coeffs);
+			auto vars = mpc.Solve(state, coeffs);
 			
-          double steer_value = vars[0];
-          double throttle_value = -vars[1];
+          double steer_value = vars[0] /  deg2rad(25) ;
+          double throttle_value = vars[1];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -175,6 +160,14 @@ int main() {
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
 
+			
+			//.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
+			// the points in the simulator are connected by a Green line
+			
+
+			msgJson["mpc_x"] = mpc_x_vals;
+			msgJson["mpc_y"] = mpc_y_vals;
+			
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
 
