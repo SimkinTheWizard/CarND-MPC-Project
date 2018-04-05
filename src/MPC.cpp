@@ -58,7 +58,8 @@ class FG_eval {
 	  for (int t = 0; t<N; t++)
 	  {
 		  // Penalize Cross track error and psi error
-		  fg[0] += 100*CppAD::pow(vars[cte_start + t],2);
+		  // penalize future cte more than the current.
+		  fg[0] += 10*t*CppAD::pow(vars[cte_start + t],2);
 		  fg[0] += 1000*CppAD::pow(vars[epsi_start + t],2);
 		  // Penalize speed error
 		  fg[0] += 10*CppAD::pow(vars[v_start + t]-ref_v,2);
@@ -257,6 +258,17 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // Cost
   auto cost = solution.obj_value;
   std::cout << "Cost " << cost << std::endl;
+	
+	std::vector<double> mpc_x_vals;
+	std::vector<double> mpc_y_vals;
+	
+	for (int i = 0; i < N-1; i++)
+	{
+		mpc_x_vals.push_back(solution.x[x_start + i]);
+		mpc_y_vals.push_back(solution.x[y_start + i]);
+	}
+	this->mpc_x_vals_ = mpc_x_vals;
+	this->mpc_y_vals_ = mpc_y_vals;
 
   // TODO: Return the first actuator values. The variables can be accessed with
   // `solution.x[i]`.

@@ -91,8 +91,9 @@ int main() {
 
   // MPC is initialized here!
   MPC mpc;
+  double previous_steer_value = 0;
 
-  h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&mpc, &previous_steer_value](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -122,9 +123,11 @@ int main() {
 			// To deal with latency
 			// estimate position 100 miliseconds into the future.
 			double delay_seconds = 0.1;
-			px = px + v * cos(psi) * delay_seconds;
-			py = py + v * sin(psi) * delay_seconds;
+			double fpx = px + v * cos(psi) * delay_seconds;
+			double fpy = py + v * sin(psi) * delay_seconds;
+			//psi += previous_steer_value * delay_seconds;
 			
+			// convert waypoints to the future predicted vehicle coordinates
 			Eigen::VectorXd vptsx = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(ptsx.data(), ptsx.size());
 			Eigen::VectorXd vptsy = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(ptsy.data(), ptsy.size());
 			
@@ -132,8 +135,8 @@ int main() {
 			{
 				double tx = vptsx[i];
 				double ty = vptsy[i];
-				vptsx[i] = (tx - px) * cos(-psi) - (ty - py) * sin(-psi);
-				vptsy[i] = (ty - py) * cos(-psi) + (tx - px) * sin(-psi);
+				vptsx[i] = (tx - fpx) * cos(-psi) - (ty - fpy) * sin(-psi);
+				vptsy[i] = (ty - fpy) * cos(-psi) + (tx - fpx) * sin(-psi);
 			}
 			
 			std::cout << vptsx << std::endl;
@@ -149,6 +152,7 @@ int main() {
 			
           double steer_value = vars[0] /  deg2rad(25) ;
           double throttle_value = vars[1];
+			previous_steer_value = steer_value;
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -157,8 +161,8 @@ int main() {
           msgJson["throttle"] = throttle_value;
 
           //Display the MPC predicted trajectory 
-          vector<double> mpc_x_vals;
-          vector<double> mpc_y_vals;
+          vector<double> mpc_x_vals = mpc.GetXVals() ;
+          vector<double> mpc_y_vals = mpc.GeyYVals();
 
 			
 			//.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
@@ -178,6 +182,16 @@ int main() {
           vector<double> next_x_vals;
           vector<double> next_y_vals;
 
+			// convert waypoints to current (not future) vehicle coordinates 
+			for (int i = 0; i< ptsx.size(); i ++)
+			{
+				
+				double tx = ptsx[i];
+				double ty = ptsy[i];
+				
+				next_x_vals.push_back( (tx - px) * cos(-psi) - (ty - py) * sin(-psi)) ;
+				next_y_vals.push_back( (ty - py) * cos(-psi) + (tx - px) * sin(-psi)) ;
+			}
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
 
