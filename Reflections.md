@@ -27,7 +27,7 @@ The motion model of the system is described with the following equations:
     cte [t + 1] = f(x[t]) - y[t] + v[t] * sin(epsi[t]) * dt;  
     epsi[t + 1] = psi[t] - psi_dest[t] + v[t]/Lf *delta[t] *dt; 
 
-Where f(x) is the polynomial fitted to the waypoints evaluated at 'x'.
+Where f(x[t]) is the polynomial fitted to the waypoints evaluated at 'x[t]'.
 
 
 Tho adjust the system I tuned the cost function and added weights. I also modified the cross track error component so as to increase weight for the future errors, because I thought would give a better result.
