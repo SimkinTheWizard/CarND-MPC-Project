@@ -82,3 +82,12 @@ In order to deal with latency I projected the vehicle x, y coordinates 100 milis
 
 I projected only x, and y points into the future. I also experimented with projecting the psi value into the future but I did not get better results, so I decided not to project this value. I never projected velocity at the moment. However projecting the velocity might increase the performance. 
 
+
+## Simulation - Result
+Here is a result of the MPC simulation doing two complete laps around the track that I recorded on my system:
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/IOvOYyKB6b4/0.jpg)](https://youtu.be/IOvOYyKB6b4)
+(Clicking on the image will take you to the youtube video.)
+
+Please note that, I optimized the system for my own cpu. If you have a more recent cpu you might get different results due to cpu time constraint of the optimizer. You might need to reduce the cpu time of the optimizer to get a similar result.
+
+
